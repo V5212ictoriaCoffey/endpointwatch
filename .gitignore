@@ -1,0 +1,8 @@
+node_modules/
+
+coverage/
+*~
+.env.local
+out/
+*.js.map
+.next/
