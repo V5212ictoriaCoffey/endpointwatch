@@ -64,6 +64,11 @@ test('clearBaseline removes entry', () => {
   expect(getBaseline(bStore, url)).toBeUndefined();
 });
 
+test('clearBaseline is a no-op for unknown url', () => {
+  const bStore = createBaselineStore();
+  expect(() => clearBaseline(bStore, 'http://unknown.com')).not.toThrow();
+});
+
 test('baselineSummary formats correctly', () => {
   const stats = { url: 'http://x.com', avgLatency: 123.4, errorRate: 0.05, sampleSize: 10, capturedAt: 0 };
   const s = baselineSummary(stats);
