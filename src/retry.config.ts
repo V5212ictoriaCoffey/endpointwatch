@@ -44,3 +44,16 @@ export function resolveRetryOptions(
     backoffFactor: config.backoffFactor ?? DEFAULT_RETRY_OPTIONS.backoffFactor,
   };
 }
+
+/**
+ * Returns a RetryConfig with retry disabled, using default values for all
+ * optional fields. Useful as a safe fallback when no config is provided.
+ */
+export function defaultRetryConfig(): RetryConfig {
+  return {
+    enabled: false,
+    maxAttempts: DEFAULT_RETRY_OPTIONS.maxAttempts,
+    delayMs: DEFAULT_RETRY_OPTIONS.delayMs,
+    backoffFactor: DEFAULT_RETRY_OPTIONS.backoffFactor,
+  };
+}
