@@ -19,6 +19,13 @@ describe('parseAnomalyConfig', () => {
     });
     expect(result).toEqual({});
   });
+
+  it('parses partial valid fields and ignores invalid ones', () => {
+    const result = parseAnomalyConfig({
+      anomalyDetection: { enabled: true, zScoreThreshold: 'bad', minSamples: 8 },
+    });
+    expect(result).toEqual({ enabled: true, minSamples: 8 });
+  });
 });
 
 describe('applyAnomalyDefaults', () => {
@@ -32,6 +39,11 @@ describe('applyAnomalyDefaults', () => {
   it('overrides with provided values', () => {
     const result = applyAnomalyDefaults({ zScoreThreshold: 3.5 });
     expect(result.zScoreThreshold).toBe(3.5);
+  });
+
+  it('preserves enabled: false when explicitly set', () => {
+    const result = applyAnomalyDefaults({ enabled: false });
+    expect(result.enabled).toBe(false);
   });
 });
 
