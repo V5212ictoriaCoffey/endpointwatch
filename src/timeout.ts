@@ -58,3 +58,21 @@ export function parseTimeoutOptions(
 export function timeoutSummary(opts: TimeoutOptions): string {
   return `timeout=${opts.timeoutMs}ms`;
 }
+
+/**
+ * Wraps a promise with a timeout. Rejects with a TimeoutError if the promise
+ * does not settle within the specified number of milliseconds.
+ */
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  const handle = createTimeoutHandle(timeoutMs);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    handle.signal.addEventListener("abort", () =>
+      reject(new Error(`Request timed out after ${timeoutMs}ms`))
+    );
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    handle.clear();
+  }
+}
