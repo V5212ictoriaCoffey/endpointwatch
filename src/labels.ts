@@ -47,3 +47,13 @@ export function labelKeys(labels: Labels): string[] {
 export function labelValues(labels: Labels): string[] {
   return Object.values(labels);
 }
+
+/**
+ * Returns a new Labels object with the specified keys removed.
+ */
+export function omitLabels(labels: Labels, ...keys: string[]): Labels {
+  const omit = new Set(keys.map(k => k.toLowerCase()));
+  return Object.fromEntries(
+    Object.entries(labels).filter(([k]) => !omit.has(k.toLowerCase()))
+  );
+}
