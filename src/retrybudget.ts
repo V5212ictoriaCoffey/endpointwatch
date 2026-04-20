@@ -57,3 +57,18 @@ export function retryBudgetSummary(store: RetryBudgetStore): Record<string, numb
   }
   return summary;
 }
+
+/**
+ * Returns the number of milliseconds until the oldest active retry entry
+ * expires for the given URL, giving callers a hint for when budget will free up.
+ * Returns 0 if there are no active entries or budget is not exhausted.
+ */
+export function retryBudgetNextRefreshMs(store: RetryBudgetStore, url: string): number {
+  const now = Date.now();
+  const existing = pruneWindow(store.budgets.get(url) ?? [], store.options.windowMs, now);
+  if (existing.length < store.options.maxRetries || existing.length === 0) {
+    return 0;
+  }
+  const oldest = existing[0].timestamp;
+  return Math.max(0, store.options.windowMs - (now - oldest));
+}
