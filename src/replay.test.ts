@@ -48,6 +48,16 @@ describe('replayEntries', () => {
     expect(result.from).toBeNull();
     expect(result.to).toBeNull();
   });
+
+  it('sets from/to based on first and last entry timestamps', () => {
+    const store = createStore();
+    addEntry(store, makeEntry('http://a.com', 200, 100, 1000));
+    addEntry(store, makeEntry('http://a.com', 200, 120, 2000));
+    addEntry(store, makeEntry('http://a.com', 200, 130, 3000));
+    const result = replayEntries(store);
+    expect(result.from).toBe(1000);
+    expect(result.to).toBe(3000);
+  });
 });
 
 describe('formatReplay', () => {
