@@ -8,97 +8,122 @@ import {
   rateLimitStoreSummary,
 } from './ratelimit.store';
 
-const URL = 'https://api.example.com/health';
-const WINDOW_MS = 60_000;
-const LIMIT = 5;
+const WINDOW = 1000;
+const MAX = 3;
+
+function makeStore() {
+  return createRateLimitStore(WINDOW, MAX);
+}
 
 describe('createRateLimitStore', () => {
-  it('creates an empty store', () => {
-    const store = createRateLimitStore();
+  it('initializes with correct config', () => {
+    const store = makeStore();
+    expect(store.windowMs).toBe(WINDOW);
+    expect(store.maxRequests).toBe(MAX);
     expect(store.entries.size).toBe(0);
   });
 });
 
 describe('getOrCreate', () => {
-  it('creates a new entry for an unknown url', () => {
-    const store = createRateLimitStore();
-    const entry = getOrCreate(store, URL, WINDOW_MS, LIMIT);
-    expect(entry.url).toBe(URL);
+  it('creates a new entry if none exists', () => {
+    const store = makeStore();
+    const entry = getOrCreate(store, 'http://a.com', 1000);
+    expect(entry.url).toBe('http://a.com');
     expect(entry.count).toBe(0);
-    expect(entry.limit).toBe(LIMIT);
+    expect(entry.windowStart).toBe(1000);
   });
 
-  it('returns existing entry within window', () => {
-    const store = createRateLimitStore();
-    const e1 = getOrCreate(store, URL, WINDOW_MS, LIMIT, 1000);
-    e1.count = 3;
-    const e2 = getOrCreate(store, URL, WINDOW_MS, LIMIT, 1500);
-    expect(e2.count).toBe(3);
-  });
-
-  it('resets entry when window expires', () => {
-    const store = createRateLimitStore();
-    const e1 = getOrCreate(store, URL, WINDOW_MS, LIMIT, 1000);
-    e1.count = 4;
-    const e2 = getOrCreate(store, URL, WINDOW_MS, LIMIT, 1000 + WINDOW_MS + 1);
-    expect(e2.count).toBe(0);
-  });
-});
-
-describe('increment', () => {
-  it('increments count and returns entry', () => {
-    const store = createRateLimitStore();
-    const e1 = increment(store, URL, WINDOW_MS, LIMIT);
-    expect(e1.count).toBe(1);
-    const e2 = increment(store, URL, WINDOW_MS, LIMIT);
+  it('returns existing entry without resetting', () => {
+    const store = makeStore();
+    const e1 = getOrCreate(store, 'http://a.com', 1000);
+    e1.count = 2;
+    const e2 = getOrCreate(store, 'http://a.com', 1050);
     expect(e2.count).toBe(2);
   });
 });
 
-describe('isAllowed', () => {
-  it('returns true when under limit', () => {
-    const store = createRateLimitStore();
-    expect(isAllowed(store, URL, WINDOW_MS, LIMIT)).toBe(true);
+describe('increment', () => {
+  it('increments count within window', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    increment(store, 'http://a.com', 1100);
+    const entry = increment(store, 'http://a.com', 1200);
+    expect(entry.count).toBe(3);
   });
 
-  it('returns false when at or over limit', () => {
-    const store = createRateLimitStore();
-    for (let i = 0; i < LIMIT; i++) increment(store, URL, WINDOW_MS, LIMIT);
-    expect(isAllowed(store, URL, WINDOW_MS, LIMIT)).toBe(false);
+  it('resets count when window expires', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    increment(store, 'http://a.com', 1100);
+    const entry = increment(store, 'http://a.com', 2001);
+    expect(entry.count).toBe(1);
+    expect(entry.windowStart).toBe(2001);
+  });
+});
+
+describe('isAllowed', () => {
+  it('allows requests under the limit', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    increment(store, 'http://a.com', 1100);
+    expect(isAllowed(store, 'http://a.com', 1200)).toBe(true);
+  });
+
+  it('blocks requests at the limit', () => {
+    const store = makeStore();
+    for (let i = 0; i < MAX; i++) increment(store, 'http://a.com', 1000 + i * 10);
+    expect(isAllowed(store, 'http://a.com', 1100)).toBe(false);
+  });
+
+  it('allows after window resets', () => {
+    const store = makeStore();
+    for (let i = 0; i < MAX; i++) increment(store, 'http://a.com', 1000 + i * 10);
+    expect(isAllowed(store, 'http://a.com', 2001)).toBe(true);
+  });
+
+  it('allows new url with no history', () => {
+    const store = makeStore();
+    expect(isAllowed(store, 'http://new.com', 1000)).toBe(true);
   });
 });
 
 describe('resetEntry', () => {
-  it('removes a specific entry', () => {
-    const store = createRateLimitStore();
-    increment(store, URL, WINDOW_MS, LIMIT);
-    resetEntry(store, URL);
-    expect(store.entries.has(URL)).toBe(false);
+  it('removes the entry for a url', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    resetEntry(store, 'http://a.com');
+    expect(store.entries.has('http://a.com')).toBe(false);
+  });
+
+  it('is a no-op for unknown url', () => {
+    const store = makeStore();
+    expect(() => resetEntry(store, 'http://unknown.com')).not.toThrow();
   });
 });
 
 describe('resetAll', () => {
   it('clears all entries', () => {
-    const store = createRateLimitStore();
-    increment(store, URL, WINDOW_MS, LIMIT);
-    increment(store, 'https://other.example.com', WINDOW_MS, LIMIT);
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    increment(store, 'http://b.com', 1000);
     resetAll(store);
     expect(store.entries.size).toBe(0);
   });
 });
 
 describe('rateLimitStoreSummary', () => {
-  it('returns a no-entries message for empty store', () => {
-    const store = createRateLimitStore();
-    expect(rateLimitStoreSummary(store)).toBe('No rate limit entries.');
+  it('returns a summary string with store config', () => {
+    const store = makeStore();
+    const summary = rateLimitStoreSummary(store);
+    expect(summary).toContain('windowMs=1000');
+    expect(summary).toContain('maxRequests=3');
   });
 
-  it('formats entries with remaining counts', () => {
-    const store = createRateLimitStore();
-    increment(store, URL, WINDOW_MS, LIMIT);
-    increment(store, URL, WINDOW_MS, LIMIT);
+  it('includes per-url entry info', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
     const summary = rateLimitStoreSummary(store);
-    expect(summary).toContain('2/5');
-    expect(summary).toContain('3 remaining');
+    expect(summary).toContain('http://a.com');
+    expect(summary).toContain('count=1');
   });
 });

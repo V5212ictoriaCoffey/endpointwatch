@@ -1,59 +1,46 @@
-/**
- * Rate limit store: tracks per-endpoint request counts within a sliding window.
- */
-
 export interface RateLimitEntry {
   url: string;
   count: number;
   windowStart: number;
-  windowMs: number;
-  limit: number;
 }
 
 export interface RateLimitStore {
   entries: Map<string, RateLimitEntry>;
+  windowMs: number;
+  maxRequests: number;
 }
 
-export function createRateLimitStore(): RateLimitStore {
-  return { entries: new Map() };
+export function createRateLimitStore(windowMs: number, maxRequests: number): RateLimitStore {
+  return {
+    entries: new Map(),
+    windowMs,
+    maxRequests,
+  };
 }
 
-export function getOrCreate(
-  store: RateLimitStore,
-  url: string,
-  windowMs: number,
-  limit: number,
-  now = Date.now()
-): RateLimitEntry {
-  let entry = store.entries.get(url);
-  if (!entry || now - entry.windowStart >= entry.windowMs) {
-    entry = { url, count: 0, windowStart: now, windowMs, limit };
-    store.entries.set(url, entry);
+export function getOrCreate(store: RateLimitStore, url: string, now = Date.now()): RateLimitEntry {
+  if (!store.entries.has(url)) {
+    store.entries.set(url, { url, count: 0, windowStart: now });
   }
-  return entry;
+  return store.entries.get(url)!;
 }
 
-export function increment(
-  store: RateLimitStore,
-  url: string,
-  windowMs: number,
-  limit: number,
-  now = Date.now()
-): RateLimitEntry {
-  const entry = getOrCreate(store, url, windowMs, limit, now);
+export function increment(store: RateLimitStore, url: string, now = Date.now()): RateLimitEntry {
+  const entry = getOrCreate(store, url, now);
+  if (now - entry.windowStart >= store.windowMs) {
+    entry.count = 0;
+    entry.windowStart = now;
+  }
   entry.count += 1;
   return entry;
 }
 
-export function isAllowed(
-  store: RateLimitStore,
-  url: string,
-  windowMs: number,
-  limit: number,
-  now = Date.now()
-): boolean {
-  const entry = getOrCreate(store, url, windowMs, limit, now);
-  return entry.count < limit;
+export function isAllowed(store: RateLimitStore, url: string, now = Date.now()): boolean {
+  const entry = getOrCreate(store, url, now);
+  if (now - entry.windowStart >= store.windowMs) {
+    return true;
+  }
+  return entry.count < store.maxRequests;
 }
 
 export function resetEntry(store: RateLimitStore, url: string): void {
@@ -65,10 +52,9 @@ export function resetAll(store: RateLimitStore): void {
 }
 
 export function rateLimitStoreSummary(store: RateLimitStore): string {
-  const lines: string[] = [];
+  const lines: string[] = [`RateLimitStore: windowMs=${store.windowMs}, maxRequests=${store.maxRequests}`];
   for (const [url, entry] of store.entries) {
-    const remaining = Math.max(0, entry.limit - entry.count);
-    lines.push(`${url}: ${entry.count}/${entry.limit} (${remaining} remaining)`);
+    lines.push(`  ${url}: count=${entry.count}, windowStart=${entry.windowStart}`);
   }
-  return lines.length ? lines.join('\n') : 'No rate limit entries.';
+  return lines.join('\n');
 }
