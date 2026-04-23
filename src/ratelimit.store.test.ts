@@ -59,6 +59,17 @@ describe('increment', () => {
     expect(entry.count).toBe(1);
     expect(entry.windowStart).toBe(2001);
   });
+
+  it('tracks multiple urls independently', () => {
+    const store = makeStore();
+    increment(store, 'http://a.com', 1000);
+    increment(store, 'http://a.com', 1100);
+    increment(store, 'http://b.com', 1000);
+    const entryA = increment(store, 'http://a.com', 1200);
+    const entryB = increment(store, 'http://b.com', 1200);
+    expect(entryA.count).toBe(3);
+    expect(entryB.count).toBe(2);
+  });
 });
 
 describe('isAllowed', () => {
@@ -102,28 +113,30 @@ describe('resetEntry', () => {
 });
 
 describe('resetAll', () => {
-  it('clears all entries', () => {
+  it('clears all entries from the store', () => {
     const store = makeStore();
     increment(store, 'http://a.com', 1000);
     increment(store, 'http://b.com', 1000);
     resetAll(store);
     expect(store.entries.size).toBe(0);
   });
+
+  it('is a no-op on an already empty store', () => {
+    const store = makeStore();
+    expect(() => resetAll(store)).not.toThrow();
+    expect(store.entries.size).toBe(0);
+  });
 });
 
 describe('rateLimitStoreSummary', () => {
-  it('returns a summary string with store config', () => {
-    const store = makeStore();
-    const summary = rateLimitStoreSummary(store);
-    expect(summary).toContain('windowMs=1000');
-    expect(summary).toContain('maxRequests=3');
-  });
-
-  it('includes per-url entry info', () => {
+  it('returns a summary of all tracked urls', () => {
     const store = makeStore();
     increment(store, 'http://a.com', 1000);
+    increment(store, 'http://a.com', 1100);
+    increment(store, 'http://b.com', 1000);
     const summary = rateLimitStoreSummary(store);
-    expect(summary).toContain('http://a.com');
-    expect(summary).toContain('count=1');
+    expect(summary).toHaveLength(2);
+    const entryA = summary.find((s) => s.url === 'http://a.com');
+    expect(entryA?.count).toBe(2);
   });
 });
