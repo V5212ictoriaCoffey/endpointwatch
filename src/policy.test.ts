@@ -28,6 +28,11 @@ describe("evaluatePolicy", () => {
     const r = evaluatePolicy([warnRule], { ...baseInput, latency: 600 });
     expect(r.action).toBe("warn");
   });
+
+  it("does not match when urlPattern does not match url", () => {
+    const r = evaluatePolicy([warnRule], { ...baseInput, url: "https://other.com/api", latency: 600 });
+    expect(r.action).toBe("allow");
+  });
 });
 
 describe("evaluateAll", () => {
@@ -80,5 +85,11 @@ describe("policy store", () => {
     expect(store.rules).toHaveLength(1);
     removeRule(store, "r1");
     expect(store.rules).toHaveLength(0);
+  });
+
+  it("does not record a violation when input passes all rules", () => {
+    const store = createPolicyStore([blockRule]);
+    check(store, { ...baseInput, latency: 50 });
+    expect(getViolations(store)).toHaveLength(0);
   });
 });
