@@ -45,7 +45,28 @@ export function loadConfig(configPath: string): AppConfig {
     throw new Error(`Failed to parse config file: ${(err as Error).message}`);
   }
 
+  validateConfig(parsed);
+
   return applyDefaults(parsed);
+}
+
+/**
+ * Validates the parsed config object, throwing descriptive errors
+ * for missing or invalid required fields.
+ */
+function validateConfig(config: AppConfig): void {
+  if (!Array.isArray(config.endpoints) || config.endpoints.length === 0) {
+    throw new Error('Config must contain a non-empty "endpoints" array.');
+  }
+
+  config.endpoints.forEach((endpoint, index) => {
+    if (!endpoint.name) {
+      throw new Error(`Endpoint at index ${index} is missing required field "name".`);
+    }
+    if (!endpoint.url) {
+      throw new Error(`Endpoint "${endpoint.name}" is missing required field "url".`);
+    }
+  });
 }
 
 function applyDefaults(config: AppConfig): AppConfig {
